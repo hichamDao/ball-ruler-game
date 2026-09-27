@@ -16,6 +16,10 @@ class Ruler {
   final double instabilityDelay;
   late final double instabilitySpeed; // signe aléatoire : sens de rotation
 
+  /// Obstacle fixe d'une chambre : ne devient jamais instable, rendu dans un
+  /// style différent des règles posées par le joueur.
+  final bool isStatic;
+
   static final Random _random = Random();
 
   Ruler({
@@ -24,12 +28,13 @@ class Ruler {
     this.length = 110,
     this.instabilityDelay = 2.5,
     double instabilityMagnitude = 0.6,
+    this.isStatic = false,
   }) {
     instabilitySpeed = instabilityMagnitude * (_random.nextBool() ? 1 : -1);
   }
 
   double get currentAngle {
-    if (age < instabilityDelay) return baseAngle;
+    if (isStatic || age < instabilityDelay) return baseAngle;
     final t = age - instabilityDelay;
     return baseAngle + instabilitySpeed * t;
   }
@@ -46,11 +51,13 @@ class Ruler {
 
   /// 0 = stable, 1 = totalement instable (utile pour la couleur/feedback visuel).
   double get instabilityRatio {
+    if (isStatic) return 0;
     final t = (age - instabilityDelay) / 4; // ~4s pour aller à fond
     return t.clamp(0.0, 1.0);
   }
 
   void update(double dt) {
+    if (isStatic) return; // un obstacle fixe ne vieillit pas
     age += dt;
   }
 }
