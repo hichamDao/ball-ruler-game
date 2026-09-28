@@ -365,25 +365,12 @@ class _GamePainter extends CustomPainter {
 
     final cameraOffset = Offset(0, scrollY);
 
-    // Zone cible en bas de la chambre courante : repère visuel uniquement,
-    // ne bloque pas la bille (c'est la "sortie" vers la chambre suivante).
-    final targetY = chamberStartY + chamber.height - scrollY;
-    final targetLeft = chamber.targetCenterX - chamber.targetWidth / 2;
-    final targetRight = chamber.targetCenterX + chamber.targetWidth / 2;
-    canvas.drawLine(
-      Offset(targetLeft, targetY),
-      Offset(targetRight, targetY),
-      Paint()
-        ..color = Colors.amberAccent
-        ..strokeWidth = 4,
-    );
-
     for (final r in rulers) {
       final paint = Paint()
         ..strokeWidth = 6
         ..strokeCap = StrokeCap.round;
       paint.color = r.isStatic
-          ? Colors.blueGrey.shade200
+          ? Colors.grey.shade300
           : Color.lerp(Colors.greenAccent, Colors.redAccent, r.instabilityRatio)!;
       canvas.drawLine(r.start - cameraOffset, r.end - cameraOffset, paint);
     }
@@ -392,6 +379,57 @@ class _GamePainter extends CustomPainter {
       ball.position - cameraOffset,
       ball.radius,
       Paint()..color = Colors.blueGrey.shade300,
+    );
+
+    _paintTargetZone(canvas);
+  }
+
+  /// Dessine la zone cible en dernier, par-dessus tout le reste, pour être
+  /// certain qu'elle ne soit jamais masquée par une règle qui la traverse.
+  /// C'est un repère purement visuel : elle ne bloque pas la bille.
+  void _paintTargetZone(Canvas canvas) {
+    final targetY = chamberStartY + chamber.height - scrollY;
+    final targetLeft = chamber.targetCenterX - chamber.targetWidth / 2;
+    final targetRight = chamber.targetCenterX + chamber.targetWidth / 2;
+
+    final gatePaint = Paint()
+      ..color = Colors.cyanAccent
+      ..strokeWidth = 5
+      ..strokeCap = StrokeCap.round;
+
+    // ligne principale de la zone cible
+    canvas.drawLine(Offset(targetLeft, targetY), Offset(targetRight, targetY), gatePaint);
+
+    // deux petits piquets verticaux pour bien marquer les bords de la zone,
+    // même quand elle devient étroite au fil des chambres
+    const postHalfHeight = 14.0;
+    canvas.drawLine(
+      Offset(targetLeft, targetY - postHalfHeight),
+      Offset(targetLeft, targetY + postHalfHeight),
+      gatePaint,
+    );
+    canvas.drawLine(
+      Offset(targetRight, targetY - postHalfHeight),
+      Offset(targetRight, targetY + postHalfHeight),
+      gatePaint,
+    );
+
+    // petit texte au-dessus, pour que la sortie reste reconnaissable même
+    // de loin ou quand la zone est devenue très étroite
+    final textPainter = TextPainter(
+      text: const TextSpan(
+        text: 'SORTIE',
+        style: TextStyle(
+          color: Colors.cyanAccent,
+          fontSize: 12,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    textPainter.paint(
+      canvas,
+      Offset(chamber.targetCenterX - textPainter.width / 2, targetY - postHalfHeight - 16),
     );
   }
 

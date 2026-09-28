@@ -9,8 +9,15 @@ import '../models/chamber.dart';
 final List<Chamber> handCraftedChambers = [
   const Chamber(
     height: 420,
-    targetCenterX: 180,
-    targetWidth: 90,
+    // décalée par rapport au point de départ de la bille (x=180) : tomber
+    // tout droit sans poser de règle rate la zone, même en chambre 1.
+    targetCenterX: 260,
+    targetWidth: 100,
+    obstacles: [
+      // un premier obstacle fixe, servant de repère pour poser sa première
+      // règle par rapport à lui. Légèrement incliné (voir note plus bas).
+      ObstacleSpec(relativeCenter: Offset(190, 190), length: 90, angle: 0.15),
+    ],
   ),
   const Chamber(
     height: 460,
@@ -27,7 +34,7 @@ final List<Chamber> handCraftedChambers = [
   const Chamber(
     height: 500,
     targetCenterX: 100,
-    targetWidth: 70,
+    targetWidth: 60,
     obstacles: [
       ObstacleSpec(relativeCenter: Offset(140, 180), length: 90, angle: 0.3),
       ObstacleSpec(relativeCenter: Offset(260, 340), length: 90, angle: -0.3),
@@ -38,13 +45,15 @@ final List<Chamber> handCraftedChambers = [
 final Random _levelRandom = Random();
 
 /// Génère une chambre au-delà des niveaux écrits à la main : la zone cible
-/// rétrécit et le nombre d'obstacles augmente doucement avec [index].
+/// continue de rétrécir et le nombre d'obstacles augmente doucement avec
+/// [index], en repartant des valeurs de la dernière chambre écrite à la main
+/// (60 de large, 2 obstacles) pour que la difficulté ne redescende jamais.
 /// [screenWidth] permet de garder la zone cible et les obstacles à
 /// l'intérieur de l'écran du joueur.
 Chamber generateChamber(int index, double screenWidth) {
-  final int difficulty = (index - handCraftedChambers.length).clamp(0, 30);
-  final double targetWidth = (90.0 - difficulty * 1.5).clamp(45.0, 90.0);
-  final int obstacleCount = 1 + (difficulty ~/ 4).clamp(0, 3);
+  final int beyond = (index - handCraftedChambers.length).clamp(0, 30);
+  final double targetWidth = (60.0 - beyond * 5.0).clamp(40.0, 60.0);
+  final int obstacleCount = 2 + (beyond ~/ 5).clamp(0, 3);
   final double safeWidth = screenWidth > 120 ? screenWidth : 360.0;
 
   final obstacles = List.generate(obstacleCount, (i) {
