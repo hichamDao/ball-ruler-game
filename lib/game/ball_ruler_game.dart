@@ -6,6 +6,7 @@ import 'package:flutter/scheduler.dart';
 import '../data/chambers.dart';
 import '../models/ball.dart';
 import '../models/chamber.dart';
+import '../models/furniture_type.dart';
 import '../models/ruler.dart';
 import '../utils/physics_utils.dart';
 
@@ -161,14 +162,15 @@ class BallRulerGameState extends State<BallRulerGame>
       // repositionne la bille exactement au contact, du bon côté de la règle
       _ball.position = result.closestPoint + result.normal * _ball.radius;
 
-      // on retire uniquement la composante de vitesse qui va VERS la règle ;
-      // la composante tangentielle est conservée, c'est elle qui fait rouler
+      // on retire la composante de vitesse qui va VERS la règle, et on la
+      // renvoie dans l'autre sens si la règle a du rebond (le lit) ; la
+      // composante tangentielle est conservée, c'est elle qui fait rouler
       // la bille le long de la pente (et rouler hors de la règle une fois
       // celle-ci devenue instable/inclinée).
       final vn = _ball.velocity.dx * result.normal.dx +
           _ball.velocity.dy * result.normal.dy;
       if (vn < 0) {
-        _ball.velocity -= result.normal * vn;
+        _ball.velocity -= result.normal * vn * (1 + r.restitution);
       }
     }
   }
@@ -404,13 +406,15 @@ class _GamePainter extends CustomPainter {
     final cameraOffset = Offset(0, scrollY);
 
     for (final r in rulers) {
-      final paint = Paint()
-        ..strokeWidth = 6
-        ..strokeCap = StrokeCap.round;
-      paint.color = r.isStatic
-          ? Colors.grey.shade300
-          : Color.lerp(Colors.greenAccent, Colors.redAccent, r.instabilityRatio)!;
-      canvas.drawLine(r.start - cameraOffset, r.end - cameraOffset, paint);
+      if (r.isStatic) {
+        _paintFurniture(canvas, r, cameraOffset);
+      } else {
+        final paint = Paint()
+          ..strokeWidth = 6
+          ..strokeCap = StrokeCap.round
+          ..color = Color.lerp(Colors.greenAccent, Colors.redAccent, r.instabilityRatio)!;
+        canvas.drawLine(r.start - cameraOffset, r.end - cameraOffset, paint);
+      }
     }
 
     canvas.drawCircle(
@@ -420,6 +424,129 @@ class _GamePainter extends CustomPainter {
     );
 
     _paintTargetZone(canvas);
+  }
+
+  /// Dessine un obstacle fixe selon son type de meuble. La ligne
+  /// start->end (celle qui sert à la collision) est toujours tracée en
+  /// premier, pour que le rendu reste exactement aligné avec la physique ;
+  /// le reste n'est que de la décoration par-dessus.
+  void _paintFurniture(Canvas canvas, Ruler r, Offset cameraOffset) {
+    final start = r.start - cameraOffset;
+    final end = r.end - cameraOffset;
+    final angle = r.currentAngle;
+    // perpendiculaire à la règle, pointant "vers le bas" pour une règle
+    // proche de l'horizontale : sert à dessiner pieds/tête de lit.
+    final perp = Offset(-sin(angle), cos(angle));
+
+    switch (r.furniture) {
+      case FurnitureType.plank:
+        canvas.drawLine(
+          start,
+          end,
+          Paint()
+            ..color = Colors.grey.shade300
+            ..strokeWidth = 6
+            ..strokeCap = StrokeCap.round,
+        );
+        break;
+
+      case FurnitureType.chair:
+        _paintPlatformWithLegs(
+          canvas,
+          start,
+          end,
+          perp,
+          color: const Color(0xFFB07A4B),
+          strokeWidth: 6,
+          legLength: 10,
+          legInset: 0.2,
+        );
+        break;
+
+      case FurnitureType.table:
+        _paintPlatformWithLegs(
+          canvas,
+          start,
+          end,
+          perp,
+          color: const Color(0xFF8A5A34),
+          strokeWidth: 8,
+          legLength: 14,
+          legInset: 0.05,
+        );
+        break;
+
+      case FurnitureType.bed:
+        const bedColor = Color(0xFFE08FB0);
+        canvas.drawLine(
+          start,
+          end,
+          Paint()
+            ..color = bedColor
+            ..strokeWidth = 14
+            ..strokeCap = StrokeCap.round,
+        );
+        // petite tête de lit à l'extrémité "start"
+        canvas.drawLine(
+          start,
+          start - perp * 16,
+          Paint()
+            ..color = bedColor
+            ..strokeWidth = 6
+            ..strokeCap = StrokeCap.round,
+        );
+        break;
+
+      case FurnitureType.wardrobe:
+        canvas.drawLine(
+          start,
+          end,
+          Paint()
+            ..color = const Color(0xFF6B4F3A)
+            ..strokeWidth = 26,
+        );
+        // ligne fine au centre : séparation des deux portes
+        final mid = Offset.lerp(start, end, 0.5)!;
+        final doorSeam = Offset(cos(angle), sin(angle)) * 10;
+        canvas.drawLine(
+          mid - doorSeam,
+          mid + doorSeam,
+          Paint()
+            ..color = Colors.black.withOpacity(0.4)
+            ..strokeWidth = 2,
+        );
+        break;
+    }
+  }
+
+  /// Une plateforme simple (chaise/table) : la ligne de collision, plus deux
+  /// petits pieds décoratifs en dessous.
+  void _paintPlatformWithLegs(
+    Canvas canvas,
+    Offset start,
+    Offset end,
+    Offset perp, {
+    required Color color,
+    required double strokeWidth,
+    required double legLength,
+    required double legInset,
+  }) {
+    canvas.drawLine(
+      start,
+      end,
+      Paint()
+        ..color = color
+        ..strokeWidth = strokeWidth
+        ..strokeCap = StrokeCap.round,
+    );
+
+    final legPaint = Paint()
+      ..color = color.withOpacity(0.85)
+      ..strokeWidth = 3;
+    final legStart = Offset.lerp(start, end, legInset)!;
+    final legEnd = Offset.lerp(start, end, 1 - legInset)!;
+    canvas.drawLine(legStart, legStart + perp * legLength, legPaint);
+    canvas.drawLine(legEnd, legEnd + perp * legLength, legPaint);
   }
 
   /// Dessine la zone cible en dernier, par-dessus tout le reste, pour être

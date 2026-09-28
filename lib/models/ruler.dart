@@ -1,6 +1,8 @@
 import 'dart:math';
 import 'dart:ui';
 
+import 'furniture_type.dart';
+
 /// Une règle-plateforme à la forme fixe (longueur fixe, horizontale au départ).
 /// Le joueur ne la dessine plus : il choisit juste où elle est posée.
 /// Une fois posée, elle devient de plus en plus instable : son angle dérive
@@ -35,6 +37,11 @@ class Ruler {
   /// style différent des règles posées par le joueur.
   final bool isStatic;
 
+  /// Type de meuble pour le rendu (et, pour le lit, le rebond). N'a d'effet
+  /// que sur les obstacles fixes ([isStatic] = true) : une règle posée par
+  /// le joueur garde son rendu habituel quel que soit ce champ.
+  final FurnitureType furniture;
+
   Ruler({
     required this.center,
     this.baseAngle = 0, // horizontale par défaut
@@ -43,6 +50,7 @@ class Ruler {
     this.instabilityMagnitude = 0.6,
     this.fallbackTipSign = 1,
     this.isStatic = false,
+    this.furniture = FurnitureType.plank,
   });
 
   /// À appeler à chaque collision entre la bille et cette règle : détermine
@@ -80,6 +88,12 @@ class Ruler {
     final t = (age - instabilityDelay) / 4; // ~4s pour aller à fond
     return t.clamp(0.0, 1.0);
   }
+
+  /// Coefficient de rebond : 0 = la bille ne rebondit pas (comportement
+  /// standard de toutes les règles/meubles), > 0 = elle repart dans le sens
+  /// opposé à la collision. Seul le lit rebondit ; tout le reste garde le
+  /// comportement d'origine.
+  double get restitution => furniture == FurnitureType.bed ? 0.65 : 0.0;
 
   void update(double dt) {
     if (isStatic) return; // un obstacle fixe ne vieillit pas

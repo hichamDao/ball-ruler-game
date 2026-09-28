@@ -1,5 +1,6 @@
 import 'dart:ui';
 
+import 'furniture_type.dart';
 import 'ruler.dart';
 
 /// Un obstacle fixe défini en coordonnées LOCALES à sa chambre : l'origine Y
@@ -9,11 +10,13 @@ class ObstacleSpec {
   final Offset relativeCenter;
   final double length;
   final double angle;
+  final FurnitureType furniture;
 
   const ObstacleSpec({
     required this.relativeCenter,
     this.length = 110,
     this.angle = 0,
+    this.furniture = FurnitureType.plank,
   });
 }
 
@@ -42,6 +45,7 @@ class Chamber {
               baseAngle: spec.angle,
               length: spec.length,
               isStatic: true,
+              furniture: spec.furniture,
             ))
         .toList();
   }
