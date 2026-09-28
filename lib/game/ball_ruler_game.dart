@@ -33,12 +33,13 @@ class BallRulerGameState extends State<BallRulerGame>
   static const Offset _startPosition = Offset(180, 80);
   static const int _physicsSubsteps = 4; // évite de "traverser" une règle en cas de chute rapide
 
-  // Budgets par défaut (à ajuster facilement une fois la sensation testée) :
-  // pas de minuteur en planification, progression hybride (chambres écrites
-  // à la main puis procédurales), réserve d'urgence rechargée à chaque
-  // chambre. Voir data/chambers.dart pour la progression de difficulté.
+  // Budgets et minuteur par défaut (à ajuster facilement une fois la
+  // sensation testée) : progression hybride (chambres écrites à la main
+  // puis procédurales), réserve d'urgence rechargée à chaque chambre.
+  // Voir data/chambers.dart pour la progression de difficulté.
   static const int _planningBudgetPerChamber = 3;
   static const int _emergencyBudgetPerChamber = 1;
+  static const double _planningDurationSeconds = 20;
 
   final Ball _ball = Ball(position: _startPosition);
   final List<Ruler> _activeRulers = [];
@@ -49,6 +50,7 @@ class BallRulerGameState extends State<BallRulerGame>
   late Chamber _chamber;
   int _planningBudget = _planningBudgetPerChamber;
   int _emergencyBudget = _emergencyBudgetPerChamber;
+  double _planningTimeRemaining = _planningDurationSeconds;
 
   double _elapsed = 0; // ne compte que le temps en chute (voir _onTick)
   Size _gameSize = Size.zero;
@@ -79,7 +81,13 @@ class BallRulerGameState extends State<BallRulerGame>
     if (_phase == GamePhase.gameOver || dt <= 0 || dt > 0.05) return;
 
     setState(() {
-      if (_phase == GamePhase.falling) {
+      if (_phase == GamePhase.planning) {
+        _planningTimeRemaining -= dt;
+        if (_planningTimeRemaining <= 0) {
+          _planningTimeRemaining = 0;
+          _phase = GamePhase.falling; // temps écoulé : la chute démarre toute seule
+        }
+      } else if (_phase == GamePhase.falling) {
         _elapsed += dt;
         for (final r in _activeRulers) {
           r.update(dt); // no-op pour les obstacles statiques
@@ -196,6 +204,7 @@ class BallRulerGameState extends State<BallRulerGame>
     _loadChamber(_chamberIndex);
     _planningBudget = _planningBudgetPerChamber;
     _emergencyBudget = _emergencyBudgetPerChamber;
+    _planningTimeRemaining = _planningDurationSeconds;
     _phase = GamePhase.planning;
 
     // Remonte la bille en haut de la nouvelle chambre et réaligne la caméra
@@ -252,6 +261,7 @@ class BallRulerGameState extends State<BallRulerGame>
       _loadChamber(0);
       _planningBudget = _planningBudgetPerChamber;
       _emergencyBudget = _emergencyBudgetPerChamber;
+      _planningTimeRemaining = _planningDurationSeconds;
       _elapsed = 0;
       _phase = GamePhase.planning;
       _lastTick = Duration.zero;
@@ -303,6 +313,17 @@ class BallRulerGameState extends State<BallRulerGame>
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
+                      Text(
+                        '${_planningTimeRemaining.ceil()} s',
+                        style: TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold,
+                          color: _planningTimeRemaining <= 5
+                              ? Colors.redAccent
+                              : Colors.white,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
                       _HudText('Règles disponibles : $_planningBudget'),
                       const SizedBox(height: 8),
                       ElevatedButton(
