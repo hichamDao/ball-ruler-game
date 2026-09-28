@@ -197,6 +197,15 @@ class BallRulerGameState extends State<BallRulerGame>
     _planningBudget = _planningBudgetPerChamber;
     _emergencyBudget = _emergencyBudgetPerChamber;
     _phase = GamePhase.planning;
+
+    // Remonte la bille en haut de la nouvelle chambre et réaligne la caméra
+    // dessus (comme au tout début de la partie). Sans ça, la caméra reste
+    // calée sur la fin de la chute précédente : comme les chambres
+    // suivantes sont plus hautes, la zone cible (plus bas) sort de l'écran
+    // visible pendant la planification.
+    _ball.position = Offset(_ball.position.dx, _chamberStartY + 80);
+    _ball.velocity = Offset.zero;
+    _scrollY = _chamberStartY;
   }
 
   void _triggerGameOver() {
