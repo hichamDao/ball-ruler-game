@@ -5,8 +5,11 @@ import 'dart:ui';
 /// Le joueur ne la dessine plus : il choisit juste où elle est posée.
 /// Une fois posée, elle devient de plus en plus instable : son angle dérive
 /// dans le temps jusqu'à ce que la bille n'ait plus assez d'adhérence.
-/// Le sens de rotation (horaire/anti-horaire) est tiré au hasard à chaque
-/// création, pour que chaque règle se comporte différemment.
+///
+/// Le sens de bascule (gauche/droite) N'EST PAS tiré au hasard : c'est le
+/// côté où la bille pose son poids sur la règle qui décide (comme une vraie
+/// balançoire). Ainsi, en planification, le joueur peut prédire de façon
+/// fiable de quel côté une règle va finir par pencher.
 class Ruler {
   Offset center;
   final double baseAngle;
@@ -14,29 +17,51 @@ class Ruler {
   double age = 0; // secondes écoulées depuis la pose
 
   final double instabilityDelay;
-  late final double instabilitySpeed; // signe aléatoire : sens de rotation
+  final double instabilityMagnitude;
+
+  /// Côté utilisé si la règle n'est JAMAIS touchée par la bille avant de
+  /// devenir instable (cas limite d'une règle "décor" jamais utilisée) :
+  /// -1 = penche vers "start" (gauche), 1 = penche vers "end" (droite).
+  /// Décidé une fois pour toutes à la pose, selon la position de la règle
+  /// à l'écran (voir _onTapDown dans ball_ruler_game.dart).
+  final double fallbackTipSign;
+
+  /// Côté vers lequel la bille pèse actuellement (ou a pesé en dernier) sur
+  /// la règle : -1 vers "start", 1 vers "end", null tant qu'aucun contact
+  /// n'a encore eu lieu. Mis à jour à chaque collision (voir registerContact).
+  double? _contactSign;
 
   /// Obstacle fixe d'une chambre : ne devient jamais instable, rendu dans un
   /// style différent des règles posées par le joueur.
   final bool isStatic;
-
-  static final Random _random = Random();
 
   Ruler({
     required this.center,
     this.baseAngle = 0, // horizontale par défaut
     this.length = 110,
     this.instabilityDelay = 2.5,
-    double instabilityMagnitude = 0.6,
+    this.instabilityMagnitude = 0.6,
+    this.fallbackTipSign = 1,
     this.isStatic = false,
-  }) {
-    instabilitySpeed = instabilityMagnitude * (_random.nextBool() ? 1 : -1);
+  });
+
+  /// À appeler à chaque collision entre la bille et cette règle : détermine
+  /// de quel côté du centre la bille pose son poids, ce qui décidera du sens
+  /// de bascule une fois le délai d'instabilité écoulé.
+  void registerContact(Offset contactPoint) {
+    if (isStatic) return;
+    final angle = currentAngle;
+    final axis = Offset(cos(angle), sin(angle)); // direction "vers end"
+    final relative = contactPoint - center;
+    final projection = relative.dx * axis.dx + relative.dy * axis.dy;
+    _contactSign = projection >= 0 ? 1.0 : -1.0;
   }
 
   double get currentAngle {
     if (isStatic || age < instabilityDelay) return baseAngle;
     final t = age - instabilityDelay;
-    return baseAngle + instabilitySpeed * t;
+    final sign = _contactSign ?? fallbackTipSign;
+    return baseAngle + instabilityMagnitude * sign * t;
   }
 
   Offset get start {

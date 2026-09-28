@@ -146,6 +146,10 @@ class BallRulerGameState extends State<BallRulerGame>
       );
       if (!result.hit) continue;
 
+      // le côté où la bille touche décide du sens de bascule futur (voir
+      // Ruler.registerContact) : plus de tirage au sort, c'est prévisible.
+      r.registerContact(result.closestPoint);
+
       // repositionne la bille exactement au contact, du bon côté de la règle
       _ball.position = result.closestPoint + result.normal * _ball.radius;
 
@@ -203,17 +207,21 @@ class BallRulerGameState extends State<BallRulerGame>
   void _onTapDown(TapDownDetails details) {
     if (_phase == GamePhase.gameOver) return;
     final worldPosition = details.localPosition + Offset(0, _scrollY);
+    // repli si la bille finit par toucher pile au centre : penche du côté où
+    // la règle est posée à l'écran (gauche -> gauche, droite -> droite).
+    final fallbackTipSign =
+        _gameSize.width > 0 && worldPosition.dx < _gameSize.width / 2 ? -1.0 : 1.0;
 
     if (_phase == GamePhase.planning) {
       if (_planningBudget <= 0) return;
       setState(() {
-        _activeRulers.add(Ruler(center: worldPosition));
+        _activeRulers.add(Ruler(center: worldPosition, fallbackTipSign: fallbackTipSign));
         _planningBudget--;
       });
     } else if (_phase == GamePhase.falling) {
       if (_emergencyBudget <= 0) return;
       setState(() {
-        _activeRulers.add(Ruler(center: worldPosition));
+        _activeRulers.add(Ruler(center: worldPosition, fallbackTipSign: fallbackTipSign));
         _emergencyBudget--;
       });
     }
