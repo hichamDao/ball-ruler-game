@@ -2,6 +2,7 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../data/chambers.dart';
 import '../models/ball.dart';
@@ -61,11 +62,30 @@ class BallRulerGameState extends State<BallRulerGame>
   static const double _cameraTargetFraction = 0.28; // position cible de la bille à l'écran
   static const double _cameraCatchUpSpeed = 3.0; // vitesse de rattrapage
 
+  // Meilleur score (nombre de chambres atteintes), persisté sur l'appareil.
+  static const String _bestScoreKey = 'best_chamber';
+  int _bestChamber = 0;
+  bool _isNewBest = false;
+
   @override
   void initState() {
     super.initState();
     _loadChamber(0);
+    _loadBestScore();
     _ticker = createTicker(_onTick)..start();
+  }
+
+  Future<void> _loadBestScore() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
+    setState(() {
+      _bestChamber = prefs.getInt(_bestScoreKey) ?? 0;
+    });
+  }
+
+  Future<void> _saveBestScore(int value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_bestScoreKey, value);
   }
 
   void _loadChamber(int index) {
@@ -222,6 +242,13 @@ class BallRulerGameState extends State<BallRulerGame>
   void _triggerGameOver() {
     _phase = GamePhase.gameOver;
     _ticker.stop();
+
+    final reached = _chamberIndex + 1; // chambre atteinte, 1-indexée pour l'affichage
+    _isNewBest = reached > _bestChamber;
+    if (_isNewBest) {
+      _bestChamber = reached;
+      _saveBestScore(_bestChamber); // pas besoin d'attendre, ça ne bloque pas l'UI
+    }
   }
 
   void _onTapDown(TapDownDetails details) {
@@ -300,7 +327,17 @@ class BallRulerGameState extends State<BallRulerGame>
               Positioned(
                 top: 24,
                 left: 16,
-                child: _HudText('Chambre ${_chamberIndex + 1}'),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _HudText('Chambre ${_chamberIndex + 1}'),
+                    if (_bestChamber > 0)
+                      Text(
+                        'Record : $_bestChamber',
+                        style: const TextStyle(fontSize: 13, color: Colors.white54),
+                      ),
+                  ],
+                ),
               ),
               Positioned(
                 top: 24,
@@ -358,6 +395,21 @@ class BallRulerGameState extends State<BallRulerGame>
                         'Chambre atteinte : ${_chamberIndex + 1}',
                         style: const TextStyle(fontSize: 18, color: Colors.white),
                       ),
+                      const SizedBox(height: 4),
+                      if (_isNewBest)
+                        const Text(
+                          'Nouveau record !',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.amberAccent,
+                          ),
+                        )
+                      else
+                        Text(
+                          'Meilleur score : $_bestChamber',
+                          style: const TextStyle(fontSize: 16, color: Colors.white70),
+                        ),
                       const SizedBox(height: 16),
                       ElevatedButton(
                         onPressed: restart,
