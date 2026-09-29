@@ -65,15 +65,16 @@ final List<Chamber> handCraftedChambers = [
   ),
 ];
 
-final Random _levelRandom = Random();
-
 /// Génère une chambre au-delà des niveaux écrits à la main : la zone cible
 /// continue de rétrécir et le nombre d'obstacles augmente doucement avec
 /// [index], en repartant des valeurs de la dernière chambre écrite à la main
 /// (60 de large, 2 obstacles) pour que la difficulté ne redescende jamais.
 /// [screenWidth] permet de garder la zone cible et les obstacles à
-/// l'intérieur de l'écran du joueur.
-Chamber generateChamber(int index, double screenWidth) {
+/// l'intérieur de l'écran du joueur. [random] est fourni par l'appelant :
+/// non-seedé pour une partie libre (une séquence différente à chaque fois),
+/// seedé sur la date pour le défi du jour (la même séquence pour tout le
+/// monde, voir _dailySeed dans ball_ruler_game.dart).
+Chamber generateChamber(int index, double screenWidth, Random random) {
   final int beyond = (index - handCraftedChambers.length).clamp(0, 30);
   final double targetWidth = (60.0 - beyond * 5.0).clamp(40.0, 60.0);
   final int obstacleCount = 2 + (beyond ~/ 5).clamp(0, 3);
@@ -81,15 +82,15 @@ Chamber generateChamber(int index, double screenWidth) {
 
   final obstacles = List.generate(obstacleCount, (i) {
     final relY = 120.0 + i * 140.0;
-    final relX = 60.0 + _levelRandom.nextDouble() * (safeWidth - 120.0);
-    final angle = (_levelRandom.nextDouble() - 0.5) * 0.6;
-    final furniture = _levelRandom.nextBool() ? FurnitureType.chair : FurnitureType.table;
+    final relX = 60.0 + random.nextDouble() * (safeWidth - 120.0);
+    final angle = (random.nextDouble() - 0.5) * 0.6;
+    final furniture = random.nextBool() ? FurnitureType.chair : FurnitureType.table;
     return ObstacleSpec(relativeCenter: Offset(relX, relY), angle: angle, furniture: furniture);
   });
 
   return Chamber(
     height: 420.0 + obstacleCount * 90.0,
-    targetCenterX: 40.0 + _levelRandom.nextDouble() * (safeWidth - 80.0),
+    targetCenterX: 40.0 + random.nextDouble() * (safeWidth - 80.0),
     targetWidth: targetWidth,
     obstacles: obstacles,
   );

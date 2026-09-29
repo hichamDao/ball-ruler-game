@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
@@ -5,6 +6,7 @@ import 'package:flutter/scheduler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../data/chambers.dart';
+import '../models/achievement.dart';
 import '../models/ball.dart';
 import '../models/chamber.dart';
 import '../models/furniture_type.dart';
@@ -26,6 +28,12 @@ class BallRulerGame extends StatefulWidget {
 /// - [falling] : la physique reprend, le joueur ne peut plus poser que sa
 ///   réserve d'urgence (plus petite) pour corriger une erreur.
 enum GamePhase { planning, falling, gameOver }
+
+/// [endless] : partie libre, chaque chambre procédurale est différente.
+/// [daily] : défi du jour — la génération procédurale est seedée sur la
+/// date, donc tout le monde affronte exactement la même séquence de
+/// chambres aujourd'hui (voir _dailySeed).
+enum GameMode { endless, daily }
 
 class BallRulerGameState extends State<BallRulerGame>
     with SingleTickerProviderStateMixin {
@@ -67,11 +75,35 @@ class BallRulerGameState extends State<BallRulerGame>
   int _bestChamber = 0;
   bool _isNewBest = false;
 
+  // Mode de jeu et défi du jour : en mode daily, la génération procédurale
+  // est seedée sur la date du jour, donc identique pour tout le monde.
+  GameMode _mode = GameMode.endless;
+  late Random _chamberRandom;
+  static const String _dailyBestScoreKey = 'daily_best_chamber';
+  static const String _dailyBestDateKey = 'daily_best_date';
+  int _dailyBestChamber = 0;
+
+  // Succès débloqués, persistés sur l'appareil.
+  static const String _achievementsKey = 'unlocked_achievements';
+  Set<String> _unlockedAchievements = {};
+  String? _achievementBanner;
+  Timer? _achievementBannerTimer;
+
+  // Vrai si la réserve d'urgence a été utilisée pendant la chute de la
+  // chambre en cours (remis à zéro à chaque nouvelle chambre) : sert au
+  // succès "Sans filet".
+  bool _usedEmergencyThisFall = false;
+
+  int get _currentModeBest => _mode == GameMode.daily ? _dailyBestChamber : _bestChamber;
+
   @override
   void initState() {
     super.initState();
+    _chamberRandom = Random();
     _loadChamber(0);
     _loadBestScore();
+    _loadDailyBestScore();
+    _loadAchievements();
     _ticker = createTicker(_onTick)..start();
   }
 
@@ -88,10 +120,110 @@ class BallRulerGameState extends State<BallRulerGame>
     await prefs.setInt(_bestScoreKey, value);
   }
 
+  // Le défi du jour se réinitialise chaque jour : si le meilleur score
+  // sauvegardé date d'hier (ou avant), on repart de zéro pour aujourd'hui.
+  String _todayDateString() {
+    final now = DateTime.now();
+    return '${now.year}-${now.month}-${now.day}';
+  }
+
+  int _dailySeed() {
+    final now = DateTime.now();
+    return now.year * 10000 + now.month * 100 + now.day;
+  }
+
+  Future<void> _loadDailyBestScore() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
+    final storedDate = prefs.getString(_dailyBestDateKey);
+    final storedScore = prefs.getInt(_dailyBestScoreKey) ?? 0;
+    setState(() {
+      _dailyBestChamber = storedDate == _todayDateString() ? storedScore : 0;
+    });
+  }
+
+  Future<void> _saveDailyBestScore(int value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_dailyBestScoreKey, value);
+    await prefs.setString(_dailyBestDateKey, _todayDateString());
+  }
+
+  Future<void> _loadAchievements() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
+    setState(() {
+      _unlockedAchievements = (prefs.getStringList(_achievementsKey) ?? []).toSet();
+    });
+  }
+
+  Future<void> _persistAchievements() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList(_achievementsKey, _unlockedAchievements.toList());
+  }
+
+  /// Débloque un succès s'il ne l'est pas déjà, le sauvegarde et affiche un
+  /// petit bandeau. Appelée uniquement depuis des points déjà à l'intérieur
+  /// d'un setState() (voir _onTick), donc pas besoin d'en ouvrir un de plus.
+  void _unlock(String id) {
+    if (_unlockedAchievements.contains(id)) return;
+    _unlockedAchievements = {..._unlockedAchievements, id};
+    _persistAchievements();
+    final achievement = allAchievements.firstWhere((a) => a.id == id);
+    _showAchievementBanner('Succès débloqué : ${achievement.title}');
+  }
+
+  void _showAchievementBanner(String message) {
+    _achievementBannerTimer?.cancel();
+    _achievementBanner = message;
+    _achievementBannerTimer = Timer(const Duration(seconds: 3), () {
+      if (!mounted) return;
+      setState(() => _achievementBanner = null);
+    });
+  }
+
+  void _showAchievementsDialog() {
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: Colors.grey.shade900,
+        title: const Text('Succès', style: TextStyle(color: Colors.white)),
+        content: SizedBox(
+          width: 300,
+          child: ListView(
+            shrinkWrap: true,
+            children: allAchievements.map((a) {
+              final unlocked = _unlockedAchievements.contains(a.id);
+              return ListTile(
+                leading: Icon(
+                  unlocked ? Icons.emoji_events : Icons.lock_outline,
+                  color: unlocked ? Colors.amberAccent : Colors.white38,
+                ),
+                title: Text(
+                  a.title,
+                  style: TextStyle(color: unlocked ? Colors.white : Colors.white38),
+                ),
+                subtitle: Text(
+                  a.description,
+                  style: TextStyle(color: unlocked ? Colors.white70 : Colors.white24),
+                ),
+              );
+            }).toList(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Fermer'),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _loadChamber(int index) {
     _chamber = index < handCraftedChambers.length
         ? handCraftedChambers[index]
-        : generateChamber(index, _gameSize.width > 0 ? _gameSize.width : 360.0);
+        : generateChamber(index, _gameSize.width > 0 ? _gameSize.width : 360.0, _chamberRandom);
     _activeRulers.addAll(_chamber.buildObstacles(_chamberStartY));
   }
 
@@ -175,6 +307,8 @@ class BallRulerGameState extends State<BallRulerGame>
       );
       if (!result.hit) continue;
 
+      if (r.furniture == FurnitureType.bed) _unlock('bed_bounce');
+
       // le côté où la bille touche décide du sens de bascule futur (voir
       // Ruler.registerContact) : plus de tirage au sort, c'est prévisible.
       r.registerContact(result.closestPoint);
@@ -221,13 +355,24 @@ class BallRulerGameState extends State<BallRulerGame>
   }
 
   void _advanceToNextChamber() {
+    // succès liés à la chambre qu'on vient de terminer, avant de réinitialiser
+    // les compteurs pour la nouvelle chambre
+    if (!_usedEmergencyThisFall) _unlock('no_net');
+    if (_mode == GameMode.daily) _unlock('daily_done');
+
     _chamberIndex++;
     _chamberStartY += _chamber.height;
     _loadChamber(_chamberIndex);
     _planningBudget = _planningBudgetPerChamber;
     _emergencyBudget = _emergencyBudgetPerChamber;
     _planningTimeRemaining = _planningDurationSeconds;
+    _usedEmergencyThisFall = false;
     _phase = GamePhase.planning;
+
+    // succès liés au numéro de la chambre désormais atteinte
+    if (_chamberIndex >= 1) _unlock('first_steps');
+    if (_chamberIndex >= 4) _unlock('chamber_5');
+    if (_chamberIndex >= 9) _unlock('chamber_10');
 
     // Remonte la bille en haut de la nouvelle chambre et réaligne la caméra
     // dessus (comme au tout début de la partie). Sans ça, la caméra reste
@@ -244,10 +389,18 @@ class BallRulerGameState extends State<BallRulerGame>
     _ticker.stop();
 
     final reached = _chamberIndex + 1; // chambre atteinte, 1-indexée pour l'affichage
-    _isNewBest = reached > _bestChamber;
-    if (_isNewBest) {
-      _bestChamber = reached;
-      _saveBestScore(_bestChamber); // pas besoin d'attendre, ça ne bloque pas l'UI
+    if (_mode == GameMode.daily) {
+      _isNewBest = reached > _dailyBestChamber;
+      if (_isNewBest) {
+        _dailyBestChamber = reached;
+        _saveDailyBestScore(_dailyBestChamber); // pas besoin d'attendre, ça ne bloque pas l'UI
+      }
+    } else {
+      _isNewBest = reached > _bestChamber;
+      if (_isNewBest) {
+        _bestChamber = reached;
+        _saveBestScore(_bestChamber);
+      }
     }
   }
 
@@ -270,6 +423,7 @@ class BallRulerGameState extends State<BallRulerGame>
       setState(() {
         _activeRulers.add(Ruler(center: worldPosition, fallbackTipSign: fallbackTipSign));
         _emergencyBudget--;
+        _usedEmergencyThisFall = true;
       });
     }
   }
@@ -280,8 +434,10 @@ class BallRulerGameState extends State<BallRulerGame>
     setState(() => _phase = GamePhase.falling);
   }
 
-  void restart() {
+  void restart({GameMode? mode}) {
     setState(() {
+      _mode = mode ?? _mode;
+      _chamberRandom = _mode == GameMode.daily ? Random(_dailySeed()) : Random();
       _ball.position = _startPosition;
       _ball.velocity = Offset.zero;
       _activeRulers.clear();
@@ -291,6 +447,7 @@ class BallRulerGameState extends State<BallRulerGame>
       _planningBudget = _planningBudgetPerChamber;
       _emergencyBudget = _emergencyBudgetPerChamber;
       _planningTimeRemaining = _planningDurationSeconds;
+      _usedEmergencyThisFall = false;
       _elapsed = 0;
       _phase = GamePhase.planning;
       _lastTick = Duration.zero;
@@ -299,9 +456,14 @@ class BallRulerGameState extends State<BallRulerGame>
     _ticker.start();
   }
 
+  void _switchMode() {
+    restart(mode: _mode == GameMode.endless ? GameMode.daily : GameMode.endless);
+  }
+
   @override
   void dispose() {
     _ticker.dispose();
+    _achievementBannerTimer?.cancel();
     super.dispose();
   }
 
@@ -331,9 +493,13 @@ class BallRulerGameState extends State<BallRulerGame>
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     _HudText('Chambre ${_chamberIndex + 1}'),
-                    if (_bestChamber > 0)
+                    Text(
+                      _mode == GameMode.daily ? 'Défi du jour' : 'Partie libre',
+                      style: const TextStyle(fontSize: 12, color: Colors.cyanAccent),
+                    ),
+                    if (_currentModeBest > 0)
                       Text(
-                        'Record : $_bestChamber',
+                        'Record : $_currentModeBest',
                         style: const TextStyle(fontSize: 13, color: Colors.white54),
                       ),
                   ],
@@ -342,7 +508,33 @@ class BallRulerGameState extends State<BallRulerGame>
               Positioned(
                 top: 24,
                 right: 16,
-                child: _HudText(_elapsed.toStringAsFixed(2)),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    _HudText(_elapsed.toStringAsFixed(2)),
+                    const SizedBox(height: 4),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _SmallIconButton(
+                          icon: _mode == GameMode.endless
+                              ? Icons.calendar_today
+                              : Icons.all_inclusive,
+                          tooltip: _mode == GameMode.endless
+                              ? 'Passer au défi du jour'
+                              : 'Passer en partie libre',
+                          onPressed: _switchMode,
+                        ),
+                        const SizedBox(width: 8),
+                        _SmallIconButton(
+                          icon: Icons.emoji_events,
+                          tooltip: 'Succès',
+                          onPressed: _showAchievementsDialog,
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
               if (_phase == GamePhase.planning)
                 Positioned(
@@ -407,7 +599,7 @@ class BallRulerGameState extends State<BallRulerGame>
                         )
                       else
                         Text(
-                          'Meilleur score : $_bestChamber',
+                          'Meilleur score : $_currentModeBest',
                           style: const TextStyle(fontSize: 16, color: Colors.white70),
                         ),
                       const SizedBox(height: 16),
@@ -415,7 +607,47 @@ class BallRulerGameState extends State<BallRulerGame>
                         onPressed: restart,
                         child: const Text('Rejouer'),
                       ),
+                      const SizedBox(height: 8),
+                      TextButton(
+                        onPressed: _switchMode,
+                        child: Text(
+                          _mode == GameMode.endless
+                              ? 'Essayer le défi du jour'
+                              : 'Essayer une partie libre',
+                        ),
+                      ),
                     ],
+                  ),
+                ),
+              if (_achievementBanner != null)
+                Positioned(
+                  top: 70,
+                  left: 24,
+                  right: 24,
+                  child: IgnorePointer(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
+                      decoration: BoxDecoration(
+                        color: Colors.black87,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: Colors.amberAccent, width: 1.5),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.emoji_events, color: Colors.amberAccent, size: 18),
+                          const SizedBox(width: 8),
+                          Flexible(
+                            child: Text(
+                              _achievementBanner!,
+                              style: const TextStyle(color: Colors.white, fontSize: 14),
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
             ],
@@ -433,6 +665,35 @@ class _HudText extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Text(text, style: const TextStyle(fontSize: 18, color: Colors.white));
+  }
+}
+
+/// Petit bouton icône compact pour le HUD (mode / succès), sans les marges
+/// par défaut d'un IconButton classique qui seraient trop larges ici.
+class _SmallIconButton extends StatelessWidget {
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onPressed;
+
+  const _SmallIconButton({
+    required this.icon,
+    required this.tooltip,
+    required this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: InkWell(
+        onTap: onPressed,
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: const EdgeInsets.all(4),
+          child: Icon(icon, color: Colors.white70, size: 20),
+        ),
+      ),
+    );
   }
 }
 
