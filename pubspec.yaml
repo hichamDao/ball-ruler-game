@@ -39,6 +39,9 @@ dependencies:
   # Persiste le meilleur score (chambre atteinte) sur l'appareil.
   shared_preferences: ^2.3.0
 
+  # Ouvre un lien externe (le téléchargement de l'APK) depuis la version web.
+  url_launcher: ^6.3.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
