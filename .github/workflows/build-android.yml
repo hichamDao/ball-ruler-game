@@ -29,8 +29,28 @@ jobs:
         run: flutter pub get
 
       - name: Construire l'APK
-        run: flutter build apk --release 2>&1 | tee /tmp/build.log
+        run: |
+          flutter build apk --release 2>&1 | tee /tmp/build.log
+          exit ${PIPESTATUS[0]}
 
+      # Nom de fichier stable, pour que le lien /releases/latest/download/...
+      # utilisé dans l'app pointe toujours vers le bon fichier.
+      - name: Renommer l'APK
+        run: |
+          echo "--- contenu de build/app/outputs/ ---"
+          find build/app/outputs -type f 2>&1 | tee -a /tmp/build.log
+          cp build/app/outputs/flutter-apk/app-release.apk ball-ruler-game.apk
+
+      - name: Publier une release avec l'APK
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_number }}
+          name: Build ${{ github.run_number }}
+          files: ball-ruler-game.apk
+          make_latest: true
+
+      # En toute fin de job (pas entre deux étapes) pour réagir à l'échec de
+      # n'importe laquelle des étapes précédentes, pas seulement la première.
       - name: Publier les logs en cas d'échec (diagnostic)
         if: failure()
         uses: actions/github-script@v7
@@ -50,16 +70,3 @@ jobs:
               title: 'Échec build Android (diagnostic auto) - run ' + context.runId,
               body: '```\n' + tail + '\n```',
             });
-
-      # Nom de fichier stable, pour que le lien /releases/latest/download/...
-      # utilisé dans l'app pointe toujours vers le bon fichier.
-      - name: Renommer l'APK
-        run: cp build/app/outputs/flutter-apk/app-release.apk ball-ruler-game.apk
-
-      - name: Publier une release avec l'APK
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: build-${{ github.run_number }}
-          name: Build ${{ github.run_number }}
-          files: ball-ruler-game.apk
-          make_latest: true
