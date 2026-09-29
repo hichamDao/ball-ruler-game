@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: write # nécessaire pour créer une release et y attacher l'APK
+  issues: write # publie les logs en issue si le build échoue (diagnostic)
 
 jobs:
   build:
@@ -28,7 +29,27 @@ jobs:
         run: flutter pub get
 
       - name: Construire l'APK
-        run: flutter build apk --release
+        run: flutter build apk --release 2>&1 | tee /tmp/build.log
+
+      - name: Publier les logs en cas d'échec (diagnostic)
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            let log = '';
+            try {
+              log = fs.readFileSync('/tmp/build.log', 'utf8');
+            } catch (e) {
+              log = 'Impossible de lire /tmp/build.log : ' + e.message;
+            }
+            const tail = log.length > 60000 ? log.slice(-60000) : log;
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: 'Échec build Android (diagnostic auto) - run ' + context.runId,
+              body: '```\n' + tail + '\n```',
+            });
 
       # Nom de fichier stable, pour que le lien /releases/latest/download/...
       # utilisé dans l'app pointe toujours vers le bon fichier.
