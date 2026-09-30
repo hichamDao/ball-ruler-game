@@ -138,6 +138,30 @@ Android lit en plus `android/app/google-services.json`, deja en place : un
 Sur Android, l'e-mail/mot de passe marche des que la methode est activee dans
 la console ; la connexion Google est deja prete.
 
+## Deploiement de l'APK (GitHub Actions)
+
+Le workflow `.github/workflows/build-android.yml` construit un APK release a
+chaque push et le publie en asset d'une GitHub Release, afin que le lien
+`/releases/latest/download/ball-ruler-game.apk` pointe toujours vers le dernier
+build.
+
+Ce workflow a besoin d'un seul secret, `ANDROID_GOOGLE_SERVICES_JSON_BASE64` :
+`android/app/google-services.json` est ignore par git, et le plugin
+`google-services` fait echouer le build s'il manque. Sans lui, l'APK produit ne
+pourrait ni se connecter a Firebase ni publier de score.
+
+Pour le creer, dans PowerShell a la racine du projet :
+
+```
+[Convert]::ToBase64String([IO.File]::ReadAllBytes("android\app\google-services.json")) |
+  Set-Content -NoNewline -Encoding ascii G:\Temp\gsj-base64.txt
+```
+
+Coller le contenu dans **Settings** -> **Secrets and variables** -> **Actions**
+-> onglet **Secrets**, sous le nom `ANDROID_GOOGLE_SERVICES_JSON_BASE64`. Sans
+ce secret, le job echoue volontairement avec un message explicite plutot que
+de produire un APK silencieusement casse.
+
 ## Deploiement web (GitHub Pages)
 
 Le workflow `.github/workflows/deploy-web.yml` lit la configuration dans
