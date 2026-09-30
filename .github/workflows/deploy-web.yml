@@ -20,7 +20,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - uses: subosito/flutter-action@v2
         with:
@@ -30,7 +30,7 @@ jobs:
       - name: Récupérer les dépendances
         run: flutter pub get
 
-      - uses: actions/configure-pages@v5
+      - uses: actions/configure-pages@v6
         id: pages
 
       # La configuration Firebase est lue dans firebase/firebase.env.example,
@@ -52,23 +52,36 @@ jobs:
           FIREBASE_IOS_BUNDLE_ID: ${{ secrets.FIREBASE_IOS_BUNDLE_ID }}
           FIREBASE_WEB_CLIENT_ID: ${{ secrets.FIREBASE_WEB_CLIENT_ID }}
         run: |
+          # Les valeurs lues ici sont exportees pour les steps suivants via
+          # GITHUB_ENV : ce fichier n'est visible que dans le step suivant, donc
+          # la validation doit porter sur les variables locales, pas sur
+          # $FIREBASE_* (qui serait encore vide a ce stade).
+          missing=""
           while IFS='=' read -r key value; do
             case "$key" in ''|'#'*) continue ;; esac
             # Le fichier est versionne en LF, mais un edition sous Windows peut
             # reintroduire un \r qui contaminerait la valeur transmise au build.
+            key="${key%$'\r'}"
             value="${value%$'\r'}"
             eval "current=\${$key:-}"
             if [ -n "$current" ]; then
               echo "::notice::$key vient d'un secret GitHub, le fichier est ignore."
+              eval "resolved_$key=\$current"
             else
               echo "$key=$value" >> "$GITHUB_ENV"
+              eval "resolved_$key=\$value"
             fi
           done < firebase/firebase.env.example
+
           for v in FIREBASE_API_KEY FIREBASE_APP_ID FIREBASE_PROJECT_ID; do
-            eval "value=\${$v:-}"
-            [ -n "$value" ] || { echo "::error::$v est vide : ni dans le fichier ni dans les secrets."; exit 1; }
+            eval "value=\${resolved_$v:-}"
+            [ -n "$value" ] || missing="$missing $v"
           done
-          echo "FIREBASE_PROJECT_ID=$FIREBASE_PROJECT_ID"
+          if [ -n "$missing" ]; then
+            echo "::error::Valeur absente du fichier ET des secrets :$missing"
+            exit 1
+          fi
+          echo "Configuration Firebase trouvee, projet=$resolved_FIREBASE_PROJECT_ID"
 
       # base-href doit correspondre au chemin réel de la Page (ex :
       # /ball-ruler-game/), sinon les assets ne se chargent pas.
