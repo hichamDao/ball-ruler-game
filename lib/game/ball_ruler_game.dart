@@ -1,9 +1,11 @@
 import 'dart:async';
 import 'dart:math';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../data/chambers.dart';
 import '../models/achievement.dart';
@@ -44,6 +46,13 @@ class BallRulerGameState extends State<BallRulerGame>
 
   static const Offset _startPosition = Offset(180, 80);
   static const int _physicsSubsteps = 4; // évite de "traverser" une règle en cas de chute rapide
+
+  // APK généré automatiquement par .github/workflows/build-android.yml à
+  // chaque push sur main. Ce lien pointe toujours vers le dernier build,
+  // quel que soit le numéro de version (voir "linking to releases" dans la
+  // doc GitHub : /releases/latest/download/<nom-du-fichier>).
+  static const String _androidAppUrl =
+      'https://github.com/hichamDao/ball-ruler-game/releases/latest/download/ball-ruler-game.apk';
 
   // Budgets et minuteur par défaut (à ajuster facilement une fois la
   // sensation testée) : progression hybride (chambres écrites à la main
@@ -408,6 +417,42 @@ class BallRulerGameState extends State<BallRulerGame>
         _saveBestScore(_bestChamber);
       }
     }
+
+    // Sur le web uniquement (inutile de le proposer si on est déjà dans
+    // l'app Android) : laisse d'abord l'écran de fin de partie s'afficher,
+    // puis ouvre le dialogue par-dessus une fois la frame rendue.
+    if (kIsWeb) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _showPlatformPromptDialog());
+    }
+  }
+
+  void _showPlatformPromptDialog() {
+    if (!mounted) return;
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: Colors.grey.shade900,
+        title: const Text('Continuer sur le web ?', style: TextStyle(color: Colors.white)),
+        content: const Text(
+          "Tu peux rester ici, ou essayer l'application Android pour jouer "
+          "hors ligne et avec de meilleures performances.",
+          style: TextStyle(color: Colors.white70),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Rester sur le web'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.of(dialogContext).pop();
+              launchUrl(Uri.parse(_androidAppUrl), mode: LaunchMode.externalApplication);
+            },
+            child: const Text("Essayer l'app Android"),
+          ),
+        ],
+      ),
+    );
   }
 
   void _onTapDown(TapDownDetails details) {
