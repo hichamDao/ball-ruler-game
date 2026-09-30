@@ -41,3 +41,22 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Firebase : google-services.json contient les cles de ton projet, jamais
+# committé. Les valeurs de --dart-define, elles, sont versionnees dans
+# firebase/firebase.env.example (identifiants de projet publics) ; une copie
+# locale avec les secrets eventuels reste ignoree.
+/android/app/google-services.json
+**/GoogleService-Info.plist
+.firebase/
+# firebase_options.dart de la racine est genere par flutterfire ; celui du
+# projet (lib/firebase/firebase_options.dart) est code a la main et versionne.
+/firebase_options.dart
+.firebase.json
+.firebaserc
+# Copie locale eventuelle des variables, versionnee uniquement le .example.
+firebase/firebase.env
+
+# Etat interne de l'outil de developpement (worktrees, config) : sans rapport
+# avec le jeu, et volumineux.
+.kilo/

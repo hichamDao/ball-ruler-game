@@ -33,10 +33,57 @@ jobs:
       - uses: actions/configure-pages@v5
         id: pages
 
+      # La configuration Firebase est lue dans firebase/firebase.env.example,
+      # versionné dans le dépôt. Ce sont des identifiants de projet publics :
+      # ils sont déjà présents en clair dans le bundle JS publié, donc les
+      # mettre en secret n'ajouterait aucune protection réelle. Un secret
+      # GitHub peut toutefois surcharger une valeur, ce qui permet de tester
+      # une autre configuration sans toucher au fichier — d'où le test avant
+      # chaque export : la sourcedirecte écrase ce que GitHub a fourni.
+      - name: Charger la configuration Firebase
+        env:
+          FIREBASE_API_KEY: ${{ secrets.FIREBASE_API_KEY }}
+          FIREBASE_APP_ID: ${{ secrets.FIREBASE_APP_ID }}
+          FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.FIREBASE_MESSAGING_SENDER_ID }}
+          FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
+          FIREBASE_AUTH_DOMAIN: ${{ secrets.FIREBASE_AUTH_DOMAIN }}
+          FIREBASE_STORAGE_BUCKET: ${{ secrets.FIREBASE_STORAGE_BUCKET }}
+          FIREBASE_MEASUREMENT_ID: ${{ secrets.FIREBASE_MEASUREMENT_ID }}
+          FIREBASE_IOS_BUNDLE_ID: ${{ secrets.FIREBASE_IOS_BUNDLE_ID }}
+          FIREBASE_WEB_CLIENT_ID: ${{ secrets.FIREBASE_WEB_CLIENT_ID }}
+        run: |
+          while IFS='=' read -r key value; do
+            case "$key" in ''|'#'*) continue ;; esac
+            # Le fichier est versionne en LF, mais un edition sous Windows peut
+            # reintroduire un \r qui contaminerait la valeur transmise au build.
+            value="${value%$'\r'}"
+            eval "current=\${$key:-}"
+            if [ -n "$current" ]; then
+              echo "::notice::$key vient d'un secret GitHub, le fichier est ignore."
+            else
+              echo "$key=$value" >> "$GITHUB_ENV"
+            fi
+          done < firebase/firebase.env.example
+          for v in FIREBASE_API_KEY FIREBASE_APP_ID FIREBASE_PROJECT_ID; do
+            eval "value=\${$v:-}"
+            [ -n "$value" ] || { echo "::error::$v est vide : ni dans le fichier ni dans les secrets."; exit 1; }
+          done
+          echo "FIREBASE_PROJECT_ID=$FIREBASE_PROJECT_ID"
+
       # base-href doit correspondre au chemin réel de la Page (ex :
       # /ball-ruler-game/), sinon les assets ne se chargent pas.
       - name: Construire la version web
-        run: flutter build web --release --base-href "${{ steps.pages.outputs.base_path }}/"
+        run: |
+          flutter build web --release --base-href "${{ steps.pages.outputs.base_path }}/" \
+            --dart-define=FIREBASE_API_KEY="$FIREBASE_API_KEY" \
+            --dart-define=FIREBASE_APP_ID="$FIREBASE_APP_ID" \
+            --dart-define=FIREBASE_MESSAGING_SENDER_ID="$FIREBASE_MESSAGING_SENDER_ID" \
+            --dart-define=FIREBASE_PROJECT_ID="$FIREBASE_PROJECT_ID" \
+            --dart-define=FIREBASE_AUTH_DOMAIN="$FIREBASE_AUTH_DOMAIN" \
+            --dart-define=FIREBASE_STORAGE_BUCKET="$FIREBASE_STORAGE_BUCKET" \
+            --dart-define=FIREBASE_MEASUREMENT_ID="$FIREBASE_MEASUREMENT_ID" \
+            --dart-define=FIREBASE_IOS_BUNDLE_ID="$FIREBASE_IOS_BUNDLE_ID" \
+            --dart-define=FIREBASE_WEB_CLIENT_ID="$FIREBASE_WEB_CLIENT_ID"
 
       - uses: actions/upload-pages-artifact@v3
         with:

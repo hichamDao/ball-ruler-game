@@ -1,4 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Firebase Auth et Firestore ont besoin du reseau. -->
+    <uses-permission android:name="android.permission.INTERNET"/>
     <application
         android:label="ball_ruler_game"
         android:name="${applicationName}"
@@ -41,5 +43,8 @@
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
         </intent>
+        <!-- google_sign_in 6.x demande la resolution du paquet Google Play
+             Services pour ouvrir la fenetre de connexion Google. -->
+        <package android:name="com.google.android.gms"/>
     </queries>
 </manifest>

@@ -16,7 +16,9 @@ import '../utils/physics_utils.dart';
 /// À utiliser comme body d'un Scaffold (ou dans un SizedBox.expand),
 /// pas de taille infinie : il a besoin de contraintes finies pour dessiner.
 class BallRulerGame extends StatefulWidget {
-  const BallRulerGame({super.key});
+  final void Function(int chambersReached, GameMode mode)? onGameOver;
+
+  const BallRulerGame({super.key, this.onGameOver});
 
   @override
   State<BallRulerGame> createState() => BallRulerGameState();
@@ -389,6 +391,10 @@ class BallRulerGameState extends State<BallRulerGame>
     _ticker.stop();
 
     final reached = _chamberIndex + 1; // chambre atteinte, 1-indexée pour l'affichage
+    // Publication cloud : faite sans await, pour ne pas retarder l'affichage
+    // du game over. Le service ignore l'appel si l'utilisateur est invité.
+    widget.onGameOver?.call(reached, _mode);
+
     if (_mode == GameMode.daily) {
       _isNewBest = reached > _dailyBestChamber;
       if (_isNewBest) {

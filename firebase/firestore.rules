@@ -1,0 +1,38 @@
+rules_version = '2';
+
+// Un seul motif : chaque joueur possède sa ligne et ne peut écrire que
+// dessus, la lecture est publique pour tous (c'est un classement).
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    match /players/{userId} {
+      allow read: if true;
+      allow create: if request.auth != null
+                    && request.auth.uid == userId;
+      // Les règles Firestore ne permettent pas de comparer un document à
+      // lui-même : chaque écriture passe donc par request.resource.data
+      // (la nouvelle version) et resource.data (l'ancienne). Le classement
+      // se fait sur bestChambers (general) et dailyBestChambers (defi du
+      // jour) : on interdit de les diminuer et on impose une borne haute,
+      // sinon un client malveillant (ou un bug) peut s'auto-attribuer
+      // 999999 chambres.
+      allow update: if request.auth != null
+                    && request.auth.uid == userId
+                    && request.resource.data.bestChambers
+                       >= resource.data.bestChambers
+                    && request.resource.data.bestChambers <= 100000
+                    && request.resource.data.dailyBestChambers
+                       >= resource.data.dailyBestChambers
+                    && request.resource.data.dailyBestChambers <= 100000
+                    && request.resource.data.dailyBestChambers
+                       <= request.resource.data.bestChambers;
+
+      allow delete: if false;
+    }
+
+    // Toute autre collection est fermee par defaut.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
