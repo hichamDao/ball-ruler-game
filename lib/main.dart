@@ -187,7 +187,13 @@ class _GamePageState extends State<GamePage> {
           ),
         ),
       ),
-      body: BallRulerGame(key: _gameKey, onGameOver: _onGameOver),
+      body: BallRulerGame(
+        key: _gameKey,
+        onGameOver: _onGameOver,
+        // Le jeu s'en sert pour ne pas proposer l'app Android au web à un
+        // joueur déjà connecté (voir _showPlatformPromptDialog).
+        isSignedIn: () => AuthScope.of(context).isSignedIn,
+      ),
     );
   }
 }

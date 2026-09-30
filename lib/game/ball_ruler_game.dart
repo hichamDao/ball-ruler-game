@@ -20,11 +20,28 @@ import '../utils/physics_utils.dart';
 class BallRulerGame extends StatefulWidget {
   final void Function(int chambersReached, GameMode mode)? onGameOver;
 
-  const BallRulerGame({super.key, this.onGameOver});
+  /// Indique si un compte est connecté. Sur le web, le dialogue de fin de
+  /// partie ne propose de basculer vers l'app Android que si ce n'est pas le
+  /// cas : proposer de quitter le web alors que le joueur est déjà identifié
+  /// n'a aucun intérêt. Passé `null`, la proposition est faite dans tous les
+  /// cas.
+  final bool Function()? isSignedIn;
+
+  const BallRulerGame({super.key, this.onGameOver, this.isSignedIn});
 
   @override
   State<BallRulerGame> createState() => BallRulerGameState();
 }
+
+/// Vrai si le dialogue « rester sur le web ou passer à l'app Android » a un
+/// intérêt à être montré.
+///
+/// Isolée de l'UI pour être testable : le dialogue lui-même ne s'ouvre que sur
+/// le web (ce qui le rend impossible à vérifier dans un test widget, le runner
+/// de test n'étant jamais `kIsWeb`). Un joueur déjà connecté n'est jamais
+/// sollicité : sa session est persistée et ses scores partent déjà dans le
+/// cloud, lui proposer de quitter le web serait du bruit.
+bool gameOffersAndroidApp({required bool isSignedIn}) => !isSignedIn;
 
 /// Les deux temps du jeu de stratégie/arcade :
 /// - [planning] : le temps est figé, le joueur pose ses règles avec un
@@ -421,7 +438,12 @@ class BallRulerGameState extends State<BallRulerGame>
     // Sur le web uniquement (inutile de le proposer si on est déjà dans
     // l'app Android) : laisse d'abord l'écran de fin de partie s'afficher,
     // puis ouvre le dialogue par-dessus une fois la frame rendue.
-    if (kIsWeb) {
+    //
+    // Un joueur déjà connecté n'est pas sollicité : sa session est persistée,
+    // ses scores partent dans le cloud, et lui proposer de quitter le web
+    // pour l'app serait du bruit. Le dialogue ne concerne que ceux qui
+    // jouent en invité.
+    if (kIsWeb && gameOffersAndroidApp(isSignedIn: widget.isSignedIn?.call() ?? false)) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _showPlatformPromptDialog());
     }
   }
@@ -434,8 +456,9 @@ class BallRulerGameState extends State<BallRulerGame>
         backgroundColor: Colors.grey.shade900,
         title: const Text('Continuer sur le web ?', style: TextStyle(color: Colors.white)),
         content: const Text(
-          "Tu peux rester ici, ou essayer l'application Android pour jouer "
-          "hors ligne et avec de meilleures performances.",
+          "Tu joues en invité : ton score reste sur cet appareil. Tu peux "
+          "rester ici, ou essayer l'application Android pour jouer hors ligne, "
+          "et te connecter pour apparaître dans le classement.",
           style: TextStyle(color: Colors.white70),
         ),
         actions: [

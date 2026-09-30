@@ -1,3 +1,4 @@
+import 'package:ball_ruler_game/game/ball_ruler_game.dart';
 import 'package:ball_ruler_game/main.dart';
 import 'package:ball_ruler_game/models/player_score.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -62,5 +63,12 @@ void main() {
     expect(find.text("Pas encore de compte ? S'inscrire"), findsOneWidget);
     // Le mode invité reste proposé : on n'impose jamais un compte.
     expect(find.text('Continuer en invité'), findsOneWidget);
+  });
+
+  test('le jeu ne propose pas l\'app Android à un joueur connecté', () {
+    // La règle est testable séparément du dialogue, qui ne s'ouvre que sur le
+    // web : ce qui compte ici est qu'elle dépende de l'état de connexion.
+    expect(gameOffersAndroidApp(isSignedIn: true), isFalse);
+    expect(gameOffersAndroidApp(isSignedIn: false), isTrue);
   });
 }
