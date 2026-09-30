@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'firebase/firebase_bootstrap.dart';
 import 'firebase/firebase_options.dart';
@@ -6,6 +7,7 @@ import 'game/ball_ruler_game.dart';
 import 'services/auth_service.dart';
 import 'services/score_service.dart';
 import 'ui/auth_page.dart';
+import 'ui/help_page.dart';
 import 'ui/leaderboard_page.dart';
 
 Future<void> main() async {
@@ -87,8 +89,32 @@ class GamePage extends StatefulWidget {
 class _GamePageState extends State<GamePage> {
   final GlobalKey<BallRulerGameState> _gameKey = GlobalKey();
 
+  /// Une fois seulement par installation : l'aide s'affiche seule au premier
+  /// lancement, puis le joueur s'en sert via l'icône « ? ».
+  static const String _helpSeenKey = 'help_seen';
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _showHelpOnce());
+  }
+
+  Future<void> _showHelpOnce() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
+    if (prefs.getBool(_helpSeenKey) ?? false) return;
+    await prefs.setBool(_helpSeenKey, true);
+    await _openHelp();
+  }
+
   void _restart() {
     _gameKey.currentState?.restart();
+  }
+
+  Future<void> _openHelp() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => const HelpPage()),
+    );
   }
 
   /// Fin de partie : on publie le nombre de chambres atteint si un compte est
@@ -146,6 +172,11 @@ class _GamePageState extends State<GamePage> {
             onPressed: _openLeaderboard,
             tooltip: 'Classement des joueurs',
             icon: const Icon(Icons.leaderboard_outlined),
+          ),
+          IconButton(
+            onPressed: _openHelp,
+            tooltip: 'Comment jouer',
+            icon: const Icon(Icons.help_outline),
           ),
           // Connecté, le bandeau du bas affiche déjà le nom : inutile
           // d'en proposer un second bouton. L'icône d'accès ne sert que

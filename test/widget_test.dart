@@ -1,6 +1,7 @@
 import 'package:ball_ruler_game/game/ball_ruler_game.dart';
 import 'package:ball_ruler_game/main.dart';
 import 'package:ball_ruler_game/models/player_score.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -52,9 +53,20 @@ void main() {
   });
 
   testWidgets('l\'écran de connexion propose e-mail et Google', (tester) async {
+    // L'aide s'ouvre toute seule au premier lancement : il faut la fermer
+    // avant d'atteindre la barre du titre.
     await tester.pumpWidget(const MyApp());
-    await tester.pump();
+    await tester.pumpAndSettle();
+    if (find.text('Comment jouer').evaluate().isNotEmpty) {
+      await tester.pageBack();
+      // pump() et non pumpAndSettle() : de retour sur le jeu, son ticker
+      // redemande des frames en continu et pumpAndSettle ne terminerait
+      // jamais. 400 ms couvrent l'animation de retour.
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+    }
 
+    expect(find.byTooltip('Se connecter'), findsOneWidget);
     await tester.tap(find.byTooltip('Se connecter'));
     await tester.pumpAndSettle();
 
@@ -63,6 +75,45 @@ void main() {
     expect(find.text("Pas encore de compte ? S'inscrire"), findsOneWidget);
     // Le mode invité reste proposé : on n'impose jamais un compte.
     expect(find.text('Continuer en invité'), findsOneWidget);
+  });
+
+  testWidgets('l\'aide explique les règles du jeu', (tester) async {
+    await tester.pumpWidget(const MyApp());
+    await tester.pumpAndSettle();
+    // Le premier lancement ouvre l'écran d'aide automatiquement.
+    expect(find.text('Comment jouer'), findsOneWidget);
+    expect(find.text('Le principe'), findsOneWidget);
+    expect(find.textContaining('SORTIE'), findsWidgets);
+
+    // Une fois refermée, l'icône de la barre du titre la rouvre.
+    await tester.pageBack();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.text('Le principe'), findsNothing);
+
+    await tester.tap(find.byTooltip('Comment jouer'));
+    await tester.pumpAndSettle();
+    expect(find.text('Le principe'), findsOneWidget);
+  });
+
+  testWidgets('l\'aide ne s\'affiche qu\'une seule fois', (tester) async {
+    await tester.pumpWidget(const MyApp());
+    await tester.pumpAndSettle();
+    // On quitte l'aide, puis on relance l'app comme si on rouvrait le jeu.
+    await tester.pageBack();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.text('Le principe'), findsNothing);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+    await tester.pumpWidget(const MyApp());
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+
+    expect(find.text('Le principe'), findsNothing);
+    // L'icône reste disponible dans la barre du titre.
+    expect(find.byTooltip('Comment jouer'), findsOneWidget);
   });
 
   test('le jeu ne propose pas l\'app Android à un joueur connecté', () {
