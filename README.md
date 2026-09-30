@@ -103,6 +103,7 @@ Deja fait dans la console `ball-ruler` (projet `74297917075`) :
 - App Web `ball_ruler_game` (appId `1:74297917075:web:c1f719550832c77e4fd766`).
 - Methode Google activee, client Web cree, SHA-1 de debug rattache au client
   Android dans `android/app/google-services.json`.
+- Site publie et teste : <https://hichamDao.github.io/ball-ruler-game/>.
 - Builds verifies : APK debug et web, `flutter analyze` propre, 4 tests verts.
 
 Reste a faire dans la console :
@@ -110,9 +111,16 @@ Reste a faire dans la console :
 - Activer **E-mail/Mot de passe** (non verifiable depuis la CLI : l'API
   d'identite n'expose pas l'etat des methodes pour ce compte).
 - *Authentication* -> *Réglages* -> **Domaines autorisés** : ajouter
-  `localhost` (test en navigateur) et le domaine de la Page GitHub Pages
-  (`<user>.github.io` puis `<user>.github.io/ball-ruler-game/`), sans quoi la
-  connexion Google depuis le navigateur sera refusee.
+  `localhost` (test en navigateur) et le domaine de la Page GitHub Pages :
+
+  ```
+  hichamDao.github.io
+  hichamDao.github.io/ball-ruler-game/
+  ```
+
+  Sans ces entrees, la connexion Google depuis le navigateur echoue avec
+  `auth/unauthorized-domain`. Le jeu, lui, fonctionne sans : c'est la
+  connexion seule qui est refusee.
 
 ## Lancer en local
 
