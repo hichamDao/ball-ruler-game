@@ -1,5 +1,5 @@
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter/foundation.dart';
+import 'package:flutter/foundation.dart' show ChangeNotifier, kIsWeb;
 import 'package:google_sign_in/google_sign_in.dart';
 
 import '../firebase/firebase_bootstrap.dart';
@@ -115,10 +115,25 @@ class AuthService extends ChangeNotifier {
   Future<void> signInWithGoogle() async {
     final auth = _requireAuth();
     await _run(() async {
+      if (kIsWeb) {
+        // Sur le web, on délègue à Firebase plutôt qu'à google_sign_in. Les
+        // deux utilisent le même client OAuth, mais ici c'est Firebase qui
+        // gère la popup et remonte ses propres codes d'erreur : plus de
+        // aller-retour entre deux SDK, et un échec n'est plus silencieux.
+        await auth.signInWithPopup(GoogleAuthProvider());
+        return;
+      }
+
       final signInAccount = await _google.signIn();
       if (signInAccount == null) {
-        // Annulation volontaire de l'utilisateur : ce n'est pas une erreur.
-        return;
+        // Une annulation volontaire ne doit pas être signalée comme une
+        // erreur, mais elle ne doit pas non plus être confondue avec une
+        // réussite : sans ce message, un échec de popup ramenait
+        // silencieusement à l'écran précédent, en invité, sans explication.
+        throw const AuthFailure(
+          'Connexion Google non aboutie. Si une fenêtre ne s\'est pas '
+          'ouverte, autorise les popups pour ce site.',
+        );
       }
       final googleAuth = await signInAccount.authentication;
       final credential = GoogleAuthProvider.credential(
