@@ -30,8 +30,14 @@ jobs:
       - name: Récupérer les dépendances
         run: flutter pub get
 
+      # enablement: la v6 de cette action ne réactive plus|Pages toute seule
+      # quand elle a été désactivée (ni au premier déploiement) : sans ce
+      # paramètre, le job échoue sur « Get Pages site failed » et le site
+      # reste inaccessible.
       - uses: actions/configure-pages@v6
         id: pages
+        with:
+          enablement: true
 
       # La configuration Firebase est lue dans firebase/firebase.env.example,
       # versionné dans le dépôt. Ce sont des identifiants de projet publics :
