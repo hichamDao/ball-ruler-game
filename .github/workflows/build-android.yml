@@ -38,7 +38,11 @@ jobs:
           ANDROID_GOOGLE_SERVICES_JSON_BASE64: ${{ secrets.ANDROID_GOOGLE_SERVICES_JSON_BASE64 }}
         run: |
           if [ -z "$ANDROID_GOOGLE_SERVICES_JSON_BASE64" ]; then
-            echo "::error::Secret ANDROID_GOOGLE_SERVICES_JSON_BASE64 absent : impossible de produire un APK avec Firebase."
+            echo "::error title=Secret introuvable::ANDROID_GOOGLE_SERVICES_JSON_BASE64 est vide pour ce job."
+            echo "::error::Le fichier android/app/google-services.json est ignore par git (il contient la cle API Android) et n'existe donc pas sur le runner : sans ce secret, le plugin google-services fait echouer le build."
+            echo "::error::Creez-le ici, dans l'onglet Secrets (PAS Environments) : https://github.com/${{ github.repository }}/settings/secrets/actions"
+            echo "::error::Nom exact, sans espace : ANDROID_GOOGLE_SERVICES_JSON_BASE64"
+            echo "::error::A generer : [Convert]::ToBase64String([IO.File]::ReadAllBytes('android/app/google-services.json'))"
             exit 1
           fi
           mkdir -p android/app
