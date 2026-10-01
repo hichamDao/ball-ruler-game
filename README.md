@@ -164,7 +164,7 @@ Pour le creer, dans PowerShell a la racine du projet :
 [Convert]::ToBase64String([IO.File]::ReadAllBytes("android\app\google-services.json")) |
   Set-Content -NoNewline -Encoding ascii G:\Temp\gsj-base64.txt
 ```
-
+nn
 Coller le contenu dans **Settings** -> **Secrets and variables** -> **Actions**
 -> onglet **Secrets**, sous le nom `ANDROID_GOOGLE_SERVICES_JSON_BASE64`. Sans
 ce secret, le job echoue volontairement avec un message explicite plutot que
